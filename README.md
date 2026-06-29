@@ -2,8 +2,11 @@
 
 Enterprise Knowledge Assistant is a local-first retrieval augmented generation (RAG) app for asking questions over PDF documents. It uses Streamlit for the UI, PyMuPDF for PDF parsing, SentenceTransformers for local embeddings, ChromaDB for persistence, and Gemini 2.0 Flash for response generation.
 
-## What It Does
 
+## What It Does
+> Built as an AI Engineer assignment demonstrating production-quality 
+> RAG system design with local embeddings, persistent vector search, 
+> hallucination prevention, and source citations.
 - Upload one or more PDFs from the UI or place them in `data/`.
 - Extract page-aware text from PDFs with PyMuPDF.
 - Chunk documents into overlapping segments for retrieval.
@@ -105,7 +108,17 @@ enterprise-knowledge-assistant/
 ```
 
 ## Smoke Test
+## Tech Stack
 
+| Layer | Technology |
+|---|---|
+| UI | Streamlit |
+| PDF Parsing | PyMuPDF |
+| Embeddings | sentence-transformers/all-MiniLM-L6-v2 |
+| Vector Store | ChromaDB |
+| LLM | Google Gemini 2.0 Flash |
+| Framework | LangChain |
+| Language | Python 3.12 |
 Run the repository smoke test to validate ingestion, retrieval, and refusal behavior:
 
 ```powershell
