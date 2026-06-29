@@ -1,0 +1,12 @@
+streamlit==1.38.0
+langchain==0.3.25
+langchain-community==0.3.24
+langchain-google-genai==2.1.4
+langchain-text-splitters==0.3.8
+langchain-huggingface==0.1.2
+sentence-transformers==3.4.1
+chromadb==0.5.23
+PyMuPDF==1.24.9
+python-dotenv==1.1.0
+numpy==1.26.4
+pytest==8.3.2
