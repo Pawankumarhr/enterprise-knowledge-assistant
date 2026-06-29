@@ -171,18 +171,43 @@ def format_context(chunks: Sequence[RetrievedChunk]) -> str:
 	return "\n\n".join(formatted_blocks)
 
 
-def build_prompt(question: str, chunks: Sequence[RetrievedChunk]) -> str:
+def _format_conversation_history(
+	conversation_history: Sequence[dict[str, str]] | None,
+) -> str:
+	"""Format recent Q&A turns for prompt context."""
+
+	if not conversation_history:
+		return "Conversation history: None"
+
+	formatted_turns: list[str] = []
+	for index, turn in enumerate(conversation_history, start=1):
+		user_question = turn.get("question", "").strip()
+		assistant_answer = turn.get("answer", "").strip()
+		formatted_turns.append(
+			f"Turn {index}\nQ: {user_question}\nA: {assistant_answer}"
+		)
+	return "Conversation history:\n" + "\n\n".join(formatted_turns)
+
+
+def build_prompt(
+	question: str,
+	chunks: Sequence[RetrievedChunk],
+	conversation_history: Sequence[dict[str, str]] | None = None,
+) -> str:
 	"""Build a grounded prompt that forces the model to stay on context."""
 
 	context = format_context(chunks)
+	history_text = _format_conversation_history(conversation_history)
 	return (
 		"You are an enterprise knowledge assistant. Answer strictly from the provided "
 		"context from uploaded documents.\n\n"
 		"Rules:\n"
 		"- Use only the context below.\n"
+		"- Use the conversation history only as prior context for follow-up questions.\n"
 		f"- If the answer cannot be found in the context, reply with exactly: {EMPTY_CONTEXT_MESSAGE}\n"
 		"- Do not guess, do not add external knowledge, and do not mention missing context.\n"
 		"- Keep the answer concise and factual.\n\n"
+		f"{history_text}\n\n"
 		f"Question: {question}\n\n"
 		f"Context:\n{context}\n\n"
 		"Answer:"
@@ -237,7 +262,37 @@ def _extractive_fallback_answer(question: str, chunks: Sequence[RetrievedChunk])
 	return first_chunk if len(first_chunk) <= 300 else f"{first_chunk[:297].rstrip()}..."
 
 
-def answer_question(question: str, api_key: str, top_k: int = DEFAULT_TOP_K) -> RagResponse:
+def clean_answer_text(answer: str) -> str:
+	"""Remove prompt echoes and retrieved-context artifacts from model output."""
+
+	text = (answer or "").strip()
+	if not text:
+		return ""
+
+	lines = [line.strip() for line in text.splitlines() if line.strip()]
+	filtered_lines: list[str] = []
+	for line in lines:
+		lower_line = line.lower()
+		if lower_line.startswith("context:") or lower_line.startswith("sources:"):
+			continue
+		if lower_line.startswith("[") and "]" in lower_line and "source:" in lower_line:
+			continue
+		if lower_line.startswith("answer:"):
+			line = line.split(":", 1)[1].strip()
+			if not line:
+				continue
+		filtered_lines.append(line)
+
+	cleaned = "\n".join(filtered_lines).strip()
+	return cleaned or text
+
+
+def answer_question(
+	question: str,
+	api_key: str,
+	top_k: int = DEFAULT_TOP_K,
+	conversation_history: Sequence[dict[str, str]] | None = None,
+) -> RagResponse:
 	"""Answer a question using retrieved document context and Gemini."""
 
 	normalized_question = validate_question(question)
@@ -246,7 +301,7 @@ def answer_question(question: str, api_key: str, top_k: int = DEFAULT_TOP_K) -> 
 	if not retrieved_chunks:
 		return RagResponse(answer=EMPTY_CONTEXT_MESSAGE, sources=tuple())
 
-	prompt = build_prompt(normalized_question, retrieved_chunks)
+	prompt = build_prompt(normalized_question, retrieved_chunks, conversation_history)
 	try:
 		answer = _generate_with_gemini(prompt, api_key)
 	except RuntimeError as error:
@@ -255,16 +310,28 @@ def answer_question(question: str, api_key: str, top_k: int = DEFAULT_TOP_K) -> 
 			raise
 		answer = _extractive_fallback_answer(normalized_question, retrieved_chunks)
 
+	answer = clean_answer_text(answer)
+
 	if not answer or answer == EMPTY_CONTEXT_MESSAGE:
 		answer = EMPTY_CONTEXT_MESSAGE
 
 	return RagResponse(answer=answer, sources=tuple(retrieved_chunks))
 
 
-def answer_with_sources(question: str, api_key: str, top_k: int = DEFAULT_TOP_K) -> dict[str, object]:
+def answer_with_sources(
+	question: str,
+	api_key: str,
+	top_k: int = DEFAULT_TOP_K,
+	conversation_history: Sequence[dict[str, str]] | None = None,
+) -> dict[str, object]:
 	"""Convenience wrapper that returns a serializable answer payload."""
 
-	response = answer_question(question=question, api_key=api_key, top_k=top_k)
+	response = answer_question(
+		question=question,
+		api_key=api_key,
+		top_k=top_k,
+		conversation_history=conversation_history,
+	)
 	return {
 		"answer": response.answer,
 		"sources": [

@@ -25,6 +25,30 @@ logger = get_logger(__name__)
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 
+def _add_ui_styles() -> None:
+	"""Remove Streamlit's extra top whitespace."""
+
+	st.markdown(
+		"""
+		<style>
+		header[data-testid="stHeader"], footer, #MainMenu {
+			display: none;
+		}
+
+		.block-container {
+			padding-top: 0;
+			padding-bottom: 1rem;
+		}
+
+		[data-testid="stVerticalBlock"] {
+			gap: 0.75rem;
+		}
+		</style>
+		""",
+		unsafe_allow_html=True,
+	)
+
+
 def _load_environment() -> str:
 	"""Load environment variables and validate the Gemini API key."""
 
